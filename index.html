@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, shrink-to-fit=no, viewport-fit=cover">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <title>Single Cell Practice</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://unpkg.com/abcjs@6.4.0/dist/abcjs-basic.js"></script>
+</head>
+<body>
+    <div class="container">
+        <!-- Welcome Screen -->
+        <div id="welcome-screen" class="screen">
+            <h1 class="title">Single Cell Practice</h1>
+            <div class="welcome-grid">
+                <button id="login-btn" class="nav-btn">Login</button>
+            </div>
+        </div>
+
+        <!-- Mode Selection Screen -->
+        <div id="mode-screen" class="screen hidden">
+            <h2 class="screen-title">Choose Mode</h2>
+            <div class="mode-grid">
+                <button id="random-mode-btn" class="nav-btn">Random</button>
+                <button id="designate-mode-btn" class="nav-btn">Designate</button>
+            </div>
+            <div class="return-arrow" id="mode-return"><span class="triangle-left"></span></div>
+        </div>
+
+        <!-- Key Selection Screen -->
+        <div id="key-screen" class="screen hidden">
+            <h2 class="screen-title">Choose Key</h2>
+            <div class="key-grid">
+                <button class="key-btn nav-btn" data-key="C">C</button>
+                <button class="key-btn nav-btn" data-key="F">F</button>
+                <button class="key-btn nav-btn" data-key="Bb">Bb</button>
+                <button class="key-btn nav-btn" data-key="Eb">Eb</button>
+                <button class="key-btn nav-btn" data-key="Ab">Ab</button>
+                <button class="key-btn nav-btn" data-key="Db">Db</button>
+                <button class="key-btn nav-btn" data-key="F#">F#</button>
+                <button class="key-btn nav-btn" data-key="B">B</button>
+                <button class="key-btn nav-btn" data-key="E">E</button>
+                <button class="key-btn nav-btn" data-key="A">A</button>
+                <button class="key-btn nav-btn" data-key="D">D</button>
+                <button class="key-btn nav-btn" data-key="G">G</button>
+            </div>
+            <div class="return-arrow" id="key-return"><span class="triangle-left"></span></div>
+        </div>
+
+        <!-- Cell Display Screen -->
+        <div id="cell-screen" class="screen hidden">
+            <div class="music-display">
+                <div id="notation" class="notation-container"></div>
+                <div id="key-display" class="key-display"></div>
+            </div>
+            <div class="controls">
+                <button id="toggle-cell-btn" class="action-btn">Show Full</button>
+            </div>
+            <div class="return-arrow" id="cell-return"><span class="triangle-left"></span></div>
+            <button id="play-7sus4-btn" class="play-btn" title="Play 7sus4">▶</button>
+            <audio id="audio-7sus4" preload="auto"></audio>
+        </div>
+    </div>
+
+    <script src="data.js"></script>
+    <script src="music-utils.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
