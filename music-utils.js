@@ -70,6 +70,41 @@ function adjustPhraseOctave(phrase, key) {
     });
 }
 
+// Check if a phrase is within the comfortable reading range F3–C5 (used for phrase generation validation)
+function isPhraseInComfortRange(phrase) {
+    if (!phrase || !Array.isArray(phrase)) return false;
+    for (const note of phrase) {
+        const [pitchClass, octave] = noteToPitch(note);
+        if (pitchClass === undefined || octave === undefined) continue;
+        const absolutePitch = pitchClass + (octave * 12);
+        if (absolutePitch < F3_PITCH || absolutePitch > C5_PITCH) {
+            return false;
+        }
+    }
+    return true;
+}
+
+// Adjust rightCell so that its first note matches leftCell's last note EXACTLY in pitch (same pitch class + octave).
+function adjustRightCell(leftCell, rightCell) {
+    if (!leftCell || !rightCell || leftCell.length === 0 || rightCell.length === 0) {
+        return rightCell;
+    }
+    const lastLeft = leftCell[leftCell.length - 1];
+    const firstRight = rightCell[0];
+    const [pcL, octL] = noteToPitch(lastLeft);
+    const [pcR, octR] = noteToPitch(firstRight);
+    if (pcL === undefined || pcR === undefined || octL === undefined || octR === undefined) {
+        return rightCell;
+    }
+
+    // We want: pcR + 12*octR + totalShift === pcL + 12*octL  (exact match)
+    const targetAbs = pcL + octL * 12;
+    const baseAbs = pcR + octR * 12;
+    const totalShift = targetAbs - baseAbs;
+
+    return rightCell.map(note => transposeNote(note, totalShift, "C"));
+}
+
 function convertToABCWithAccidentals(notes) {
     const accidentalState = {};
     return notes.map(note => {
@@ -133,9 +168,56 @@ K:C
 ${abcNotes}`;
 }
 
+// Phrase: arbitrary length (e.g. 2 cells concatenated).
+// Uses exactly the same logic as bpp-web-version's generateABCScore.
+function generateABCScore(phrase, partial = false, phraseLength = 9) {
+    let notes;
+    let abcNotes;
+
+    const displayPhrase = phrase;
+
+    if (partial) {
+        if (phraseLength < 5) {
+            throw new Error("Phrase must have at least 5 notes for partial display");
+        }
+
+        if (phraseLength === 9) {
+            // Show notes at positions [0, 4, 8] with rests between
+            notes = [displayPhrase[0], displayPhrase[4], displayPhrase[8]];
+            const abcNotesList = convertToABCWithAccidentals(notes);
+            abcNotes = `${abcNotesList[0]} z z z ${abcNotesList[1]} z z z ${abcNotesList[2]}`;
+        } else if (phraseLength === 17) {
+            // Show notes at positions [0, 4, 8, 12, 16] with rests between
+            notes = [displayPhrase[0], displayPhrase[4], displayPhrase[8], displayPhrase[12], displayPhrase[16]];
+            const abcNotesList = convertToABCWithAccidentals(notes);
+            abcNotes = `${abcNotesList[0]} z z z ${abcNotesList[1]} z z z ${abcNotesList[2]} z z z ${abcNotesList[3]} z z z ${abcNotesList[4]}`;
+        } else {
+            // Other lengths: show first, middle, and last notes
+            notes = [displayPhrase[0], displayPhrase[4], displayPhrase[displayPhrase.length - 1]];
+            const abcNotesList = convertToABCWithAccidentals(notes);
+            abcNotes = `${abcNotesList[0]} z z z ${abcNotesList[1]} z z z ${abcNotesList[2]}`;
+        }
+    } else {
+        // Full phrase: show all notes with proper accidental handling and beaming
+        notes = displayPhrase;
+        const abcNotesList = convertToABCWithAccidentals(notes);
+        abcNotes = groupNotesForBeaming(abcNotesList);
+    }
+
+    const abcNotation = `X:1
+L:1/8
+K:C
+${abcNotes}`;
+
+    return abcNotation;
+}
+
 if (typeof window !== 'undefined') {
     window.noteToPitch = noteToPitch;
     window.transposeNote = transposeNote;
     window.adjustPhraseOctave = adjustPhraseOctave;
+    window.isPhraseInComfortRange = isPhraseInComfortRange;
+    window.adjustRightCell = adjustRightCell;
     window.generateABCSingleCell = generateABCSingleCell;
+    window.generateABCScore = generateABCScore;
 }

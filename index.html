@@ -18,7 +18,17 @@
             </div>
         </div>
 
-        <!-- Cell Type Selection Screen -->
+        <!-- Practice Type Selection Screen -->
+        <div id="practice-type-screen" class="screen hidden">
+            <h2 class="screen-title">Practice Type</h2>
+            <div class="mode-grid">
+                <button id="practice-cells-btn" class="nav-btn">Cells</button>
+                <button id="practice-phrases-btn" class="nav-btn">Phrases</button>
+            </div>
+            <div class="return-arrow" id="practice-type-return"><span class="triangle-left"></span></div>
+        </div>
+
+        <!-- Cell Type Selection Screen (for Cells practice) -->
         <div id="cell-type-screen" class="screen hidden">
             <h2 class="screen-title">Choose Cell Type</h2>
             <div class="mode-grid">
@@ -26,6 +36,16 @@
                 <button id="pentatonic-cell-btn" class="nav-btn">Pentatonic</button>
             </div>
             <div class="return-arrow" id="cell-type-return"><span class="triangle-left"></span></div>
+        </div>
+
+        <!-- Phrase Type Selection Screen (for Phrases practice) -->
+        <div id="phrase-type-screen" class="screen hidden">
+            <h2 class="screen-title">Choose Phrase Type</h2>
+            <div class="mode-grid">
+                <button id="bebop-phrase-btn" class="nav-btn">Bebop</button>
+                <button id="pentatonic-phrase-btn" class="nav-btn">Pentatonic</button>
+            </div>
+            <div class="return-arrow" id="phrase-type-return"><span class="triangle-left"></span></div>
         </div>
 
         <!-- Pentatonic Group Selection Screen -->

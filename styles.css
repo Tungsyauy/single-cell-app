@@ -240,7 +240,7 @@ body {
     text-align: center;
 }
 
-/* 与 chord-practice-program 完全相同的谱表 SVG 居中规则（原样复制） */
+/* 与 chord-practice-program 完全相同的谱表 SVG 居中规则（原样复制）——用于 Cells 模式 */
 #cell-screen .notation-container svg {
     position: relative !important;
     display: block !important;
@@ -253,6 +253,16 @@ body {
     transform: translateX(-50%) translateY(35px) !important;
     transform-origin: center center !important;
     filter: brightness(0) invert(1) drop-shadow(0 2px 8px rgba(0, 0, 0, 0.3)) !important;
+}
+
+/* Phrase 模式：使用与 bpp 相同的中央居中规则，不影响 Cells 模式 */
+body.phrase-mode #cell-screen .notation-container svg {
+    max-width: none !important;
+    min-width: 0 !important;
+    width: auto !important;
+    height: auto !important;
+    left: 50% !important;
+    transform: translateX(-50%) translateY(35px) !important;
 }
 
 .key-display {

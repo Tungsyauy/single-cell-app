@@ -10,6 +10,7 @@ const PENTATONIC_AUDIO_KEY = { "C": "F", "G": "C", "D": "G", "A": "D", "E": "A",
 
 let appState = {
     currentScreen: 'welcome',
+    practiceType: 'cells', // 'cells' | 'phrases'
     cellType: null,
     pentatonicGroup: null, // 1,2,3,4,'random'
     mode: null,
@@ -117,11 +118,34 @@ function showScreen(screenName) {
     document.querySelectorAll('.screen').forEach(screen => screen.classList.add('hidden'));
     document.getElementById(screenName + '-screen').classList.remove('hidden');
     appState.currentScreen = screenName;
+
+    // Apply phrase-mode centering only when we're in phrase practice on the cell screen
+    const body = document.body;
+    if (body) {
+        if (appState.currentScreen === 'cell' && appState.practiceType === 'phrases') {
+            body.classList.add('phrase-mode');
+        } else {
+            body.classList.remove('phrase-mode');
+        }
+    }
 }
 
 function updateCellDisplay() {
     if (!appState.currentCell || !appState.selectedKey) return;
-    const abcNotation = generateABCSingleCell(appState.currentCell, appState.showingPartial);
+    const isPhraseMode = appState.practiceType === 'phrases';
+    let abcNotation;
+    if (isPhraseMode) {
+        // Phrase mode: use the exact same generator as bpp (generateABCScore)
+        const phrase = appState.currentCell;
+        if (!phrase || !Array.isArray(phrase) || phrase.length === 0) return;
+        const phraseFn = (typeof window !== 'undefined' && typeof window.generateABCScore === 'function')
+            ? window.generateABCScore
+            : generateABCScore;
+        abcNotation = phraseFn(phrase, appState.showingPartial, phrase.length);
+    } else {
+        // Cells 模式：仍然使用单 cell 的 ABC 生成（必须是 5 个音）
+        abcNotation = generateABCSingleCell(appState.currentCell, appState.showingPartial);
+    }
     renderABCNotation(abcNotation);
     const keyDisplay = document.getElementById('key-display');
     if (appState.cellType === 'pentatonic') {
@@ -132,7 +156,10 @@ function updateCellDisplay() {
     } else {
         keyDisplay.textContent = `in the key of ${appState.selectedKey}7sus4`;
     }
-    document.getElementById('toggle-cell-btn').textContent = appState.showingPartial ? 'Show Full' : 'Generate Next';
+    const toggleText = isPhraseMode
+        ? 'Generate Next Phrase'
+        : (appState.showingPartial ? 'Show Full' : 'Generate Next');
+    document.getElementById('toggle-cell-btn').textContent = toggleText;
 }
 
 function renderABCNotation(abcNotation) {
@@ -160,6 +187,25 @@ function renderABCNotation(abcNotation) {
 }
 
 function handleToggleCell() {
+    const isPhraseMode = appState.practiceType === 'phrases';
+    if (isPhraseMode) {
+        // Phrase 模式：先挖空再换句子，行为与 bpp 类似
+        if (appState.showingPartial) {
+            appState.showingPartial = false;
+            updateCellDisplay();
+            return;
+        } else {
+            if (appState.mode === 'random') {
+                appState.selectedKey = pickNextKey();
+            }
+            appState.currentCell = generatePhraseForCurrentKey(appState.selectedKey);
+            appState.showingPartial = true;
+            updateCellDisplay();
+            play7sus4Audio();
+            return;
+        }
+    }
+
     if (appState.showingPartial) {
         appState.showingPartial = false;
         updateCellDisplay();
@@ -174,9 +220,85 @@ function handleToggleCell() {
     }
 }
 
+function generatePhraseForCurrentKey(key) {
+    // Follow bpp 7sus4/major short (9-note) logic closely:
+    // Start from rightCell conceptually (backward generation), then find a compatible leftCell
+    // based on pivot (shared pitch class) and glue with 1-note overlap.
+    const baseCells = getBaseCells();
+    if (!baseCells || baseCells.length < 2) {
+        return pickNextCellForKey(key);
+    }
+
+    function getPitchClassName(note) {
+        return typeof note === 'string' ? note.slice(0, -1) : null;
+    }
+
+    let bestPhrase = null;
+    const MAX_ATTEMPTS = 50;
+
+    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+        // 1. 从右往左：先选一个 rightCell（相当于 bpp 的当前 cell）
+        const rightIndex = Math.floor(Math.random() * baseCells.length);
+        const rightCellC = baseCells[rightIndex];
+        if (!rightCellC || rightCellC.length === 0) continue;
+
+        const firstRight = rightCellC[0];
+        const firstPc = getPitchClassName(firstRight);
+        if (!firstPc) continue;
+
+        // 2. 在 baseCells 中寻找所有「以 firstPc 作为结尾」的 leftCell，确保 pivot。
+        //    如果一个都找不到，就放弃这次尝试，重新选 rightCell（不能勉强用“错误调式”的 cell）。
+        const compatibleLefts = baseCells.filter(cell => {
+            const last = cell && cell[cell.length - 1];
+            return last && getPitchClassName(last) === firstPc;
+        });
+        if (compatibleLefts.length === 0) {
+            // 没有合法 pivot，换一个 rightCell 再试
+            continue;
+        }
+
+        const leftIndex = Math.floor(Math.random() * compatibleLefts.length);
+        const leftCellC = compatibleLefts[leftIndex];
+        if (!leftCellC || leftCellC.length < 2) continue;
+
+        // 3. 用 adjustRightCell 对右边 cell 做八度调整，保证连接时在 pivot 上平滑
+        const adjustedRightC = (typeof window !== 'undefined' && typeof window.adjustRightCell === 'function')
+            ? window.adjustRightCell(leftCellC, rightCellC)
+            : rightCellC;
+
+        // 4. 连接：left + adjustedRight.slice(1) = 5 + 4 = 9 notes
+        const phraseC = leftCellC.concat(adjustedRightC.slice(1));
+
+        // 5. 整句移到当前 key，并做整体八度调整与范围检查。
+        //    Pentatonic 模式下，升降号拼写规则要与 cell 模式完全一致（例如 Gm 用降号、C#m 用升号），
+        //    因此这里复用 pickNextCellForKey 中的 spellingKey 逻辑。
+        let spellingKey = key;
+        if (appState.cellType === 'pentatonic') {
+            if (key === 'G') spellingKey = 'Bb';      // Gm pentatonic -> flats (Bb/Eb)
+            else if (key === 'Db') spellingKey = 'C#'; // Dbm pentatonic 显示为 C#m，使用升号
+        }
+
+        const semitones = KEYS[key];
+        const phraseInKey = phraseC.map(note => transposeNote(note, semitones, spellingKey));
+        const octaveAdjusted = adjustPhraseOctave(phraseInKey, spellingKey);
+
+        if (isPhraseInComfortRange(octaveAdjusted)) {
+            return octaveAdjusted;
+        }
+        bestPhrase = octaveAdjusted;
+    }
+
+    return bestPhrase || pickNextCellForKey(key);
+}
+
 function navigateToCellScreen() {
-    appState.currentCell = pickNextCellForKey(appState.selectedKey);
-    appState.showingPartial = true;
+    if (appState.practiceType === 'phrases') {
+        appState.currentCell = generatePhraseForCurrentKey(appState.selectedKey);
+        appState.showingPartial = true; // 先挖空，再点一次显示完整句子
+    } else {
+        appState.currentCell = pickNextCellForKey(appState.selectedKey);
+        appState.showingPartial = true;
+    }
     showScreen('cell');
     updateCellDisplay();
     play7sus4Audio();
@@ -184,8 +306,13 @@ function navigateToCellScreen() {
 
 function navigateToCellScreenRandom() {
     appState.selectedKey = pickNextKey();
-    appState.currentCell = pickNextCellForKey(appState.selectedKey);
-    appState.showingPartial = true;
+    if (appState.practiceType === 'phrases') {
+        appState.currentCell = generatePhraseForCurrentKey(appState.selectedKey);
+        appState.showingPartial = true; // 先挖空
+    } else {
+        appState.currentCell = pickNextCellForKey(appState.selectedKey);
+        appState.showingPartial = true;
+    }
     showScreen('cell');
     updateCellDisplay();
     play7sus4Audio();
@@ -207,9 +334,21 @@ function play7sus4Audio() {
 }
 
 document.addEventListener('DOMContentLoaded', function () {
-    document.getElementById('login-btn').addEventListener('click', () => showScreen('cell-type'));
+    document.getElementById('login-btn').addEventListener('click', () => showScreen('practice-type'));
 
+    // Practice type selection
+    document.getElementById('practice-cells-btn').addEventListener('click', () => {
+        appState.practiceType = 'cells';
+        showScreen('cell-type');
+    });
+    document.getElementById('practice-phrases-btn').addEventListener('click', () => {
+        appState.practiceType = 'phrases';
+        showScreen('phrase-type');
+    });
+
+    // Cell type selection for "Cells" practice
     document.getElementById('bebop-cell-btn').addEventListener('click', () => {
+        appState.practiceType = 'cells';
         appState.cellType = 'bebop';
         appState.pentatonicGroup = null;
         appState.cellRoundOrder = null;
@@ -217,6 +356,25 @@ document.addEventListener('DOMContentLoaded', function () {
         showScreen('mode');
     });
     document.getElementById('pentatonic-cell-btn').addEventListener('click', () => {
+        appState.practiceType = 'cells';
+        appState.cellType = 'pentatonic';
+        appState.pentatonicGroup = null;
+        appState.cellRoundOrder = null;
+        appState.cellRoundIndex = 0;
+        showScreen('pentatonic-group');
+    });
+
+    // Phrase type selection for "Phrases" practice
+    document.getElementById('bebop-phrase-btn').addEventListener('click', () => {
+        appState.practiceType = 'phrases';
+        appState.cellType = 'bebop';
+        appState.pentatonicGroup = null;
+        appState.cellRoundOrder = null;
+        appState.cellRoundIndex = 0;
+        showScreen('mode');
+    });
+    document.getElementById('pentatonic-phrase-btn').addEventListener('click', () => {
+        appState.practiceType = 'phrases';
         appState.cellType = 'pentatonic';
         appState.pentatonicGroup = null;
         appState.cellRoundOrder = null;
@@ -254,8 +412,13 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     document.getElementById('toggle-cell-btn').addEventListener('click', handleToggleCell);
-    document.getElementById('cell-type-return').addEventListener('click', () => showScreen('welcome'));
-    document.getElementById('pentatonic-group-return').addEventListener('click', () => showScreen('cell-type'));
+    document.getElementById('practice-type-return').addEventListener('click', () => showScreen('welcome'));
+    document.getElementById('cell-type-return').addEventListener('click', () => showScreen('practice-type'));
+    document.getElementById('phrase-type-return').addEventListener('click', () => showScreen('practice-type'));
+    document.getElementById('pentatonic-group-return').addEventListener('click', () => {
+        if (appState.practiceType === 'phrases') showScreen('phrase-type');
+        else showScreen('cell-type');
+    });
     document.getElementById('mode-return').addEventListener('click', () => {
         if (appState.cellType === 'pentatonic') showScreen('pentatonic-group');
         else showScreen('cell-type');
@@ -275,9 +438,16 @@ document.addEventListener('DOMContentLoaded', function () {
             } else if (appState.currentScreen === 'key') showScreen('mode');
             else if (appState.currentScreen === 'mode') {
                 if (appState.cellType === 'pentatonic') showScreen('pentatonic-group');
+                else {
+                    if (appState.practiceType === 'phrases') showScreen('phrase-type');
+                    else showScreen('cell-type');
+                }
+            } else if (appState.currentScreen === 'pentatonic-group') {
+                if (appState.practiceType === 'phrases') showScreen('phrase-type');
                 else showScreen('cell-type');
-            } else if (appState.currentScreen === 'pentatonic-group') showScreen('cell-type');
-            else if (appState.currentScreen === 'cell-type') showScreen('welcome');
+            } else if (appState.currentScreen === 'phrase-type') showScreen('practice-type');
+            else if (appState.currentScreen === 'cell-type') showScreen('practice-type');
+            else if (appState.currentScreen === 'practice-type') showScreen('welcome');
         } else if ((e.key === 'Enter' || e.key === ' ') && appState.currentScreen === 'cell') {
             handleToggleCell();
         }
