@@ -5,9 +5,6 @@ const KEY_ROUND_SIZE = 12;
 
 // Pentatonic: minor key -> relative major (for display "Xm pentatonic / Y major pentatonic")
 const RELATIVE_MAJOR = { "C": "Eb", "G": "Bb", "D": "F", "A": "C", "E": "G", "B": "D", "F#": "A", "Db": "E", "Ab": "B", "Eb": "Gb", "Bb": "Db", "F": "Ab" };
-// Pentatonic: play IV7sus4 (key -> audio chord key)
-const PENTATONIC_AUDIO_KEY = { "C": "F", "G": "C", "D": "G", "A": "D", "E": "A", "B": "E", "F#": "B", "Db": "F#", "Ab": "Db", "Eb": "Ab", "Bb": "Eb", "F": "Bb" };
-
 let appState = {
     currentScreen: 'welcome',
     practiceType: 'cells', // 'cells' | 'phrases'
@@ -320,17 +317,28 @@ function navigateToCellScreenRandom() {
 
 function play7sus4Audio() {
     if (!appState.selectedKey) return;
-    const chordKey = appState.cellType === 'pentatonic'
-        ? (PENTATONIC_AUDIO_KEY[appState.selectedKey] || appState.selectedKey)
-        : appState.selectedKey;
-    const fileName = chordKey + '7sus4.mp3';
+    let fileName;
+    if (appState.cellType === 'pentatonic') {
+        const minorKey = appState.selectedKey === 'Db' ? 'C#' : appState.selectedKey;
+        fileName = minorKey + 'm.wav';
+    } else {
+        fileName = appState.selectedKey + '7sus4.mp3';
+    }
     const audioPath = 'audio/' + encodeURIComponent(fileName);
     const audio = document.getElementById('audio-7sus4');
     if (!audio) return;
-    audio.src = audioPath;
-    audio.play().catch(function (e) {
-        console.warn('Play failed:', e);
-    });
+
+    function doPlay() {
+        audio.src = audioPath;
+        audio.play().catch(function (e) {
+            console.warn('Play failed:', e);
+        });
+    }
+    if (appState.cellType === 'pentatonic') {
+        setTimeout(doPlay, 200);
+    } else {
+        doPlay();
+    }
 }
 
 document.addEventListener('DOMContentLoaded', function () {
